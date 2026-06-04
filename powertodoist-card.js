@@ -1018,7 +1018,7 @@ class PowerTodoistCard extends LitElement {
         return chosen; // { name, color }
     }
 
-    formatDueDate(dueDate, configFormat) {
+    formatDueDate(due, configFormat) {
         // Default format if none provided
         const wantMask = configFormat || "dd-mmm H'h'MM";
 
@@ -1026,8 +1026,8 @@ class PowerTodoistCard extends LitElement {
         const resolvedMask = dateFormat.masks[wantMask] || wantMask;
 
         // Format the date with the resolved mask
-        const formatted = dateFormat(dueDate, resolvedMask);
-
+        var formatted = dateFormat(due.date, resolvedMask);
+		if (due.string){ formatted = due.string;}
         // Prepend emoji and return
         return "­­🗓" + formatted;
     }
@@ -1216,12 +1216,18 @@ class PowerTodoistCard extends LitElement {
         let rendered = html`<ha-card class="${this.myConfig.accent ? 'left-accent' : ''}">
             ${(this.myConfig.show_header === undefined) || (this.myConfig.show_header !== false)
                 ? html`<h1 class="card-header">
-                    <div class="name">${cardName}
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 15" width="24" height="24">
+							<path d="M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20Z" fill="${this.myConfig.accent}" />
+						</svg>${cardName}
                     ${(this.myConfig.show_card_labels === undefined) || (this.myConfig.show_card_labels !== false)
                         ? html`${this.renderLabels(undefined, (cardLabels.length == 1 ? cardLabels : []), [], label_colors)}`
                         : html``
                     }
                     </div>
+					<hr
+						class="divider"
+						style="background-image: linear-gradient(to right, ${this.myConfig.accent}, ${this.myConfig.accent}, rgba(0, 0, 0, 0));"
+					/>
                     </h1>
                     <div id="powertodoist-toast">${this.toastText}</div>`
                 : html``}
@@ -1244,10 +1250,17 @@ class PowerTodoistCard extends LitElement {
                                         style="color:${this.getIconName(icons, 0, item).color}"
                                     ></ha-icon>
                                 </ha-icon-button>`
-                            : html`<ha-icon
-                                        .icon=${"mdi:" + icons[1].name}
-                                        style=${icons[1].color ? `color:${icons[1].color};` : ""}
-                                    ></ha-icon>`
+                            : html`${item.parent_id ? html`<span style="display: inline-block; width: 24px;"></span>` : ''}<svg class="li-bullet" width="24px" height="24px" viewBox="0 0 24 20">
+										<circle
+										cx="12"
+										cy="12"
+										r="9"
+										stroke-width="2"
+										stroke=${this.convertcolour(item.priority)}
+										fill=${this.convertcolour(item.priority)}
+										fill-opacity="0.4"
+										/>
+									</svg>`
                         }
                             <div class="powertodoist-item-text"><div
                                 @pointerdown=${(e) => this._lpStart(item, "longpress_content")}
@@ -1268,7 +1281,7 @@ class PowerTodoistCard extends LitElement {
                             ${this.renderLabels(
                                 item,
                                 this.myConfig.show_dates && item.due
-                                    ? this.formatDueDate(item.due.date, this.config.date_format)
+                                    ? this.formatDueDate(item.due, this.config.date_format)
                                     : [],
                                 [...item.labels].filter(String),
                                 // [this.myConfig.show_dates && item.due ? dateFormat(item.due.date, "🗓 dd-mmm H'h'MM") :
@@ -1303,6 +1316,28 @@ class PowerTodoistCard extends LitElement {
             </ha-card>`;
         return rendered;
     }
+
+    convertcolour(priorityID )  {
+    let calculatedColour = '';
+    switch (priorityID) {
+      case 1:
+        calculatedColour += '#808080';
+        break;
+      case 2:
+        calculatedColour += '#5297ff';
+        break;
+      case 3:
+        calculatedColour += '#ff9a14';
+        break;
+      case 4:
+        calculatedColour += '#ff7066';
+        break;
+      default:
+        calculatedColour += 'white';
+        break;
+    }
+    return calculatedColour;
+  }
 
     generateStyles() {
         var style = document.createElement('style');
@@ -1366,13 +1401,45 @@ class PowerTodoistCard extends LitElement {
         return extraLabels;
     }
 
+  renderRecurringIcon() {
+    return html`
+      <svg width="12" height="12" viewBox="0 0 12 12" class="recurring_icon">
+        <path
+          fill="currentColor"
+          d="M2.784 4.589l.07.057 1.5 1.5a.5.5 0 01-.638.765l-.07-.057L3 6.207V7a2 2 0 001.85 1.995L5 9h2.5a.5.5 0 01.09.992L7.5 10H5a3 3 0 01-2.995-2.824L2 7v-.793l-.646.647a.5.5 0 01-.638.057l-.07-.057a.5.5 0 01-.057-.638l.057-.07 1.5-1.5a.5.5 0 01.638-.057zM7 2a3 3 0 013 3v.792l.646-.646a.5.5 0 01.765.638l-.057.07-1.5 1.5a.5.5 0 01-.638.057l-.07-.057-1.5-1.5a.5.5 0 01.638-.765l.07.057.646.646V5a2 2 0 00-1.85-1.995L7 3H4.5a.5.5 0 010-1z"
+        ></path>
+      </svg>
+    `;
+  }
+
+ getTaskColorStatus(task) {
+  // Return null or a default colour if there is no due date or if the task is completed
+  if (!task.due || task.checked === 1) return null;
+
+  const now = new Date();
+  const dueDate = new Date(task.due.datetime || task.due.date);
+
+  // Calculate the difference in hours
+  const diffInHours = (dueDate - now) / (1000 * 60 * 60);
+
+  if (diffInHours < 0) {
+    return '#ff7066'; // Overdue
+  } else if (diffInHours <= 24) {
+    return '#25b84c'; // Due in next 24 hours
+  } else {
+    return '#a970ff'; // Due more than 24 hours
+  }
+}
+
     renderLabels(item, date, labels, exclusions, label_colors) {
         var extraLabels = this.generateExtraLabels(labels, label_colors);
         labels = [date, ...labels, ...extraLabels].filter(String);
         // prepend a date as a "fake" label:
         if ((item !== undefined) && (this.config.show_item_labels === false)) {
             labels = this.myConfig.show_dates && item.due ? [date, ...extraLabels] : [...extraLabels];
-        }
+    }
+
+
 
         let rendered = html`
             ${(labels.length - (exclusions?.length ?? 0) > 0)
@@ -1383,7 +1450,7 @@ class PowerTodoistCard extends LitElement {
                     let filteredColors = label_colors.filter(lc => lc.name === label);
                     let colorKey = filteredColors.length
                         ? filteredColors[0].color
-                        : "var(--primary-background-color)";
+                        : "black";
                     let color = todoistColors[colorKey] || colorKey;
                     let style = isOutline
                         ? `border: 2px solid ${color}; background: transparent; color: ${color};`
@@ -1396,7 +1463,7 @@ class PowerTodoistCard extends LitElement {
                     @pointercancel=${this._lpCancel}
                     @pointerleave=${this._lpCancel}
                     >
-                    <span>${displayLabel}</span></li>`;
+                    <span style="color:${this.getTaskColorStatus(item)};">${displayLabel}${item.due.is_recurring ? this.renderRecurringIcon() : ""}</span></li>`;
                 })}</ul></div>`
                 : html``}
         `;
@@ -1475,7 +1542,15 @@ class PowerTodoistCard extends LitElement {
             .card-header {
                 padding-bottom: unset;
             }
-           
+			
+            .card-header .divider {
+				width: 100%;
+				border: 0;
+				height: 1px;
+				margin-top: 5px;
+				margin-bottom: 0px;
+			}
+			
             .powertodoist-list {
                 display: flex;
                 padding: 15px;
@@ -1510,6 +1585,7 @@ class PowerTodoistCard extends LitElement {
                 display: flex;
                 flex-direction: row;
                 line-height: 40px;
+				border-bottom: 1px var(--mdc-radio-disabled-color) solid;
             }
                 
             .powertodoist-item-completed {
@@ -1523,7 +1599,7 @@ class PowerTodoistCard extends LitElement {
             }
             
             .powertodoist-item-text, .powertodoist-item-text > span, .powertodoist-item-text > div {
-                font-size: 16px;
+                font-size: 14px;
                 white-space: normal;      
                 word-break: break-word;   
                 overflow-wrap: break-word; 
@@ -1534,6 +1610,7 @@ class PowerTodoistCard extends LitElement {
                 display: block;
                 margin: -6px 0 -6px;
                 /* border: 1px solid red; border-width: 1px 1px 1px 1px; */
+
             }
 
             .powertodoist-item-description {
@@ -1608,7 +1685,7 @@ class PowerTodoistCard extends LitElement {
                 font-weight: normal;
                 white-space: nowrap;
                 padding: 0px 3px;
-                color: var(--ha-color-text-primary:);
+               /* color: var(--ha-color-text-primary:);*/
                 vertical-align: top;
                 float: left;
             }
@@ -1638,12 +1715,12 @@ class PowerTodoistCard extends LitElement {
                 text-align: center;
                 margin: 15px 35px -30px 45px
             }
-
+			/*
             .labelsDiv{
                 display: inline-flex;
             }
 
-            /*
+            
             ul.labels li a:hover {
                 background: url(labelx_hover.gif) no-repeat center right;
             }
